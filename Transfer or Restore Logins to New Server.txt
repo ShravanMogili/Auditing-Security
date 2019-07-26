@@ -1,0 +1,195 @@
+Transfer or Restore Logins to New Server
+
+Not my script, but this script will transfer the logins to a new server or help you restore the in a DR situation with their correct passwords (encrypted). 
+
+-- Create sp_hexadecimal, used by DR_Script_Logins below -----------------------------------
+
+IF OBJECT_ID ('sp_hexadecimal') IS NOT NULL
+  DROP PROCEDURE sp_hexadecimal
+GO
+CREATE PROCEDURE sp_hexadecimal
+    @binvalue varbinary(256),
+    @hexvalue varchar(256) OUTPUT
+AS
+DECLARE @charvalue varchar(256)
+DECLARE @i int
+DECLARE @length int
+DECLARE @hexstring char(16)
+SELECT @charvalue = '0x'
+SELECT @i = 1
+SELECT @length = DATALENGTH (@binvalue)  
+SELECT @hexstring = '0123456789ABCDEF'
+WHILE (@i <= @length)
+BEGIN
+  DECLARE @tempint int
+  DECLARE @firstint int
+  DECLARE @secondint int
+  SELECT @tempint = CONVERT(int, SUBSTRING(@binvalue,@i,1))
+  SELECT @firstint = FLOOR(@tempint/16)
+  SELECT @secondint = @tempint - (@firstint*16)
+  SELECT @charvalue = @charvalue +
+    SUBSTRING(@hexstring, @firstint+1, 1) +
+    SUBSTRING(@hexstring, @secondint+1, 1)
+  SELECT @i = @i + 1
+END
+SELECT @hexvalue = @charvalue
+GO
+ 
+--------------------------------------------------------------------------------------------
+
+
+  /*-----------------------------------------------------------------------------*
+   |     Name: DR_Script_Logins.sql                                              |
+   |   Author: Bruce Canaday                                                     |
+   |     Date: 08/09/2002                                                        |
+   |-----------------------------------------------------------------------------|
+   |  Purpose: Generate a script to add all logins for a server                  |
+   |                                                                             |
+   |-----------------------------------------------------------------------------|
+   | Modified: 10/20/2003 - Add Fixed Server Roles                               |
+   *-----------------------------------------------------------------------------*/
+
+DECLARE @login_name    sysname  
+DECLARE @name          sysname
+DECLARE @xstatus       int
+DECLARE @dbnm          sysname
+DECLARE @binpwd        varbinary (256)
+DECLARE @txtpwd        sysname
+DECLARE @tmpstr        varchar   (256)
+DECLARE @SID_varbinary varbinary  (85)
+DECLARE @SID_string    varchar   (256)
+DECLARE @loopCnt       int
+
+-------------------------------------------------------------------------------------------------
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! --
+--
+--  >>>>>>>>>>>>  IF master has been restored with an alternate name change below,  <<<<<<<<<<<<
+--                  e.g. restoring multiple servers onto one  
+--
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! --
+------------------------------------------------------------------------------------------------
+
+DECLARE login_curs CURSOR FOR 
+ SELECT l.sid, l.name, xstatus, password, d.name
+   FROM master..sysxlogins l                            -- <<<<<<<<<<<<<<<<<<  change here
+   JOIN master..sysdatabases d on d.dbid =  l.dbid      -- <<<<<<<<<<<<<<<<<<  change here
+  WHERE srvid IS NULL AND l.name <> 'sa'
+  --  uncomment if master restored with an alternate name and to exclude existing logins
+  --  AND NOT EXISTS (SELECT 1 FROM master..sysxlogins where master..sysxlogins.name = l.name)
+
+OPEN login_curs 
+FETCH NEXT FROM login_curs INTO @SID_varbinary, @name, @xstatus, @binpwd, @dbnm
+
+IF (@@fetch_status = -1)
+  BEGIN
+    PRINT 'No login(s) found.'
+    CLOSE login_curs 
+    DEALLOCATE login_curs 
+    GOTO ScriptEnd
+  END
+
+PRINT ''
+PRINT 'DECLARE @pwd sysname'
+
+WHILE (@@fetch_status <> -1)
+  BEGIN 
+    IF (@@fetch_status <> -2)
+      BEGIN
+        PRINT ''
+        SET @tmpstr = '-- Login: ' + @name
+        PRINT @tmpstr 
+
+        IF (@xstatus & 4) = 4
+          BEGIN -- NT authenticated account/group
+            IF (@xstatus & 1) = 1
+              BEGIN -- NT login is denied access
+                SET @tmpstr = 'EXEC master..sp_denylogin ''' + @name + ''''
+                PRINT @tmpstr 
+              END
+            ELSE 
+              BEGIN -- NT login has access
+                SET @tmpstr = 'EXEC master..sp_grantlogin ''' + @name + ''''
+                PRINT @tmpstr 
+              END
+          END
+        ELSE  -- NT authenticated account/group
+          BEGIN -- SQL Server authentication
+            IF (@binpwd IS NOT NULL)
+              BEGIN -- Non-null password
+                EXEC sp_hexadecimal @binpwd, @txtpwd OUT
+                IF (@xstatus & 2048) = 2048
+                  SET @tmpstr = 'SET @pwd = CONVERT (varchar(256), ' + @txtpwd + ')'
+                ELSE
+                  SET @tmpstr = 'SET @pwd = CONVERT (varbinary(256), ' + @txtpwd + ')'
+
+                PRINT @tmpstr
+                EXEC sp_hexadecimal @SID_varbinary,@SID_string OUT
+                SET @tmpstr = 'EXEC master..sp_addlogin ''' + @name 
+                        + ''', @pwd, @encryptopt = '
+              END -- Non-null password
+            ELSE 
+              BEGIN  -- Null password
+                EXEC sp_hexadecimal @SID_varbinary,@SID_string OUT
+                SET @tmpstr = 'EXEC master..sp_addlogin ''' + @name 
+                    + ''', NULL, @encryptopt = '
+              END  -- Null password
+
+              IF (@xstatus & 2048) = 2048
+                -- login upgraded from 6.5
+                SET @tmpstr = @tmpstr + '''skip_encryption_old''' 
+              ELSE 
+                SET @tmpstr = @tmpstr + '''skip_encryption'''
+
+             PRINT @tmpstr 
+          END -- SQL Server authentication
+
+      SET @tmpstr = 'if exists (select 1 from master..sysdatabases where name = ''' +@dbnm+ ''')'
+      PRINT @tmpstr 
+      SET @tmpstr = '     EXEC sp_defaultdb @loginame = ''' + @name + ''',  @defdb = ''' +@dbnm+ ''''
+      PRINT @tmpstr 
+
+      -- add fixed server roles
+      set @loopCnt = 4
+      while @loopCnt < 13
+        begin 
+          select @tmpstr = 'EXEC sp_addsrvrolemember @loginame = ''' + @name + ''',  @rolename = ''' + 
+            CASE POWER(2,@loopCnt) & @xstatus 
+              WHEN 16      THEN 'sysadmin'
+              WHEN 32      THEN 'securityadmin' 
+              WHEN 64      THEN 'serveradmin'
+              WHEN 128     THEN 'setupadmin'
+              WHEN 256     THEN 'processadmin' 
+              WHEN 512     THEN 'diskadmin'
+              WHEN 1024    THEN 'dbcreator'
+	       WHEN 4096    THEN 'bulkadmin'
+              ELSE null      
+            END  + ''''  
+ 
+          if @tmpstr is not null
+            PRINT @tmpstr 
+
+          set @loopCnt = @loopCnt + 1
+
+          if @loopCnt = 11 --skip 2048
+            set @loopCnt = @loopCnt + 1
+
+        end
+
+    END  -- @@fetch_status <> -2
+
+    FETCH NEXT FROM login_curs INTO @SID_varbinary, @name, @xstatus, @binpwd, @dbnm
+  END  -- WHILE LOOP
+
+CLOSE login_curs 
+DEALLOCATE login_curs 
+
+PRINT ''
+
+-- PRINT 'Logins that already exist in master:'
+-- SELECT name, sid, xstatus FROM DRmaster..sysxlogins 
+--   WHERE srvid IS NULL AND name <> 'sa'
+--     AND  EXISTS (SELECT 1 FROM master..sysxlogins where master..sysxlogins.name = drmaster..sysxlogins.name)
+
+ScriptEnd:
+
+

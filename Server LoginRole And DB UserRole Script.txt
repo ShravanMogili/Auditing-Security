@@ -1,0 +1,404 @@
+Server LoginRole And DB UserRole Script
+
+
+This script will produce the server login/role and db user/role in all databases in the server.It is best advised that you first delete/recreate orphaned users for best results. Copy the result of the query and paste to the destination server to recreate logins.
+
+
+/****************************************
+Script Made by Lester A. Policarpio
+For questions and clarifications feel free to email me at
+lpolicarpio2005@yahooo.com
+*/
+
+SET NOCOUNT ON
+
+print '--##############################################################'
+print '--Generate Script for Server Log-ins'
+print '--Supply <password here> with your Server log-in password'
+print '--##############################################################'
+print ''
+
+IF EXISTS (SELECT name,dbname FROM master..syslogins WHERE name <> 'sa')
+
+BEGIN
+
+DECLARE @name varchar(200)
+DECLARE @default varchar(200)
+
+print 'DECLARE @login varchar(1024)'
+print 'DECLARE @q varchar(1024)'
+print ''
+print 'CREATE TABLE login'
+print '('
+print 'names varchar(124),'
+print 'pass varchar(124),'
+print 'db varchar(124),'
+print ')'
+
+--GENERATE SERVER LOG-IN
+DECLARE master CURSOR FOR
+SELECT name,dbname FROM master..syslogins WHERE name <> 'sa' 
+OPEN master
+FETCH NEXT FROM master INTO @name,@default
+WHILE (@@FETCH_STATUS = 0)
+BEGIN
+print 'INSERT INTO login VALUES ('+''''+@name+''''+','+'''<password here>'''+','+''''+@default+''''+')'
+FETCH NEXT FROM master INTO @name,@default
+END
+CLOSE master
+DEALLOCATE master
+
+print 'DECLARE logins CURSOR FOR'
+
+print 'select '+''''''''''+'+names+'+''''''''''+'+'','''+'+'+''''''''''+'+pass+'+''''''''''+'+'','''+'+'+''''''''''+'+db+'+''''''''''+ ' AS '+'''LOG'''+ ' FROM login'
+
+print 'OPEN logins'
+
+print 'FETCH NEXT FROM logins INTO @login'
+
+print 'WHILE (@@FETCH_STATUS = 0)'
+
+print 'BEGIN'
+
+print 'SET @q = ''sp_addlogin ''+@login'
+
+print 'EXEC (@q)'
+
+print 'FETCH NEXT FROM logins INTO @login'
+
+print 'END'
+
+print 'CLOSE logins'
+
+print 'DEALLOCATE logins'
+
+print 'DROP TABLE login'
+
+END
+
+print '--#################################################################'
+print '--Generate Script for Server Roles'
+print '--#################################################################'
+print ''
+
+
+IF EXISTS (select name,dbname,sysadmin,securityadmin,serveradmin,setupadmin,processadmin,diskadmin,dbcreator,bulkadmin
+FROM master..syslogins WHERE name <> 'sa' )
+
+BEGIN
+
+DECLARE @logins varchar(200)
+DECLARE @Default1 varchar(200)
+DECLARE @sysadmin int
+DECLARE @securityadmin int
+DECLARE @serveradmin int
+DECLARE @setupadmin int
+DECLARE @processadmin int
+DECLARE @diskadmin int
+DECLARE @dbcreator int
+DECLARE @bulkadmin int
+DECLARE @master int
+
+print 'DECLARE @login2 varchar(1024)'
+print 'DECLARE @w varchar(1024)'
+print ''
+print 'CREATE TABLE login2'
+print '('
+print 'names varchar(1024),'
+print 'role varchar(3000)'
+print ')'
+print ''
+print ''
+DECLARE master CURSOR FOR
+select name,dbname,sysadmin,securityadmin,serveradmin,setupadmin,processadmin,diskadmin,dbcreator,bulkadmin
+FROM master..syslogins WHERE name <> 'sa' 
+OPEN master
+FETCH NEXT FROM master INTO @logins,@default1,@sysadmin,@securityadmin,@serveradmin,@setupadmin,@processadmin,@diskadmin,@dbcreator,@bulkadmin
+WHILE (@@FETCH_STATUS = 0)
+BEGIN
+--@@@@@@ sysadmin
+IF (@sysadmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''sysadmin'''+')'
+print ''
+END
+--@@@@@ securityadmin
+IF (@securityadmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''securityadmin'''+')'
+print ''
+END
+--@@@@@ serveradmin
+IF (@serveradmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''serveradmin'''+')'
+print ''
+END
+--@@@@@ setupadmin
+IF (@setupadmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''setupadmin'''+')'
+print ''
+END
+--@@@@@ processadmin
+IF (@processadmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''processadmin'''+')'
+print ''
+END
+--@@@@@ diskadmin
+IF (@diskadmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''diskadmin'''+')'
+print ''
+END
+--@@@@@ dbcreator
+IF (@dbcreator = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''dbcreator'''+')'
+print ''
+END
+--@@@@@ bulkadmin
+IF (@bulkadmin = 1)
+BEGIN
+print 'INSERT INTO login2 VALUES ('+''''+@logins+''''+','+'''bulkadmin'''+')'
+print ''
+END
+
+FETCH NEXT FROM master INTO @logins,@default1,@sysadmin,@securityadmin,@serveradmin,@setupadmin,@processadmin,@diskadmin,@dbcreator,@bulkadmin
+
+END
+
+CLOSE master
+
+DEALLOCATE master
+
+print 'DECLARE logins CURSOR FOR'
+
+print 'select names + '+''','''+'+ role FROM login2'
+
+print 'OPEN logins'
+
+print 'FETCH NEXT FROM logins INTO @login2'
+
+print 'WHILE (@@FETCH_STATUS = 0)'
+
+print 'BEGIN'
+
+print 'SET @w = ''sp_addsrvrolemember ''+@login2'
+print 'EXEC (@w)'
+
+print 'FETCH NEXT FROM logins INTO @login2'
+
+print 'END'
+
+print 'CLOSE logins'
+
+print 'DEALLOCATE logins'
+
+print 'DROP TABLE login2'
+
+END
+
+print '--#################################################################'
+print '--Generate Script for Database Users/ROles'
+print '--#################################################################'
+print ''
+
+
+/****************************************
+Script Made by Lester A. Policarpio
+For questions and clarifications feel free to email me at
+lpolicarpio2005@yahooo.com
+*/
+DECLARE @dbcomp varchar(1024)
+DECLARE @pass varchar(5000)
+DECLARE @counter varchar(500)
+
+
+DECLARE @dbid varchar(100)
+
+CREATE TABLE DBROLES 
+( DBName sysname not null, 
+ UserName sysname not null, 
+ db_owner varchar(3) not null,
+ db_accessadmin varchar(3) not null,
+ db_securityadmin varchar(3) not null,
+ db_ddladmin varchar(3) not null,
+ db_datareader varchar(3) not null,
+ db_datawriter varchar(3) not null,
+ db_denydatareader varchar(3) not null,
+ db_denydatawriter varchar(3) not null,
+ db_backupoperator varchar(3) not null
+)
+
+
+declare @dbname varchar(200)
+declare @mSql1????varchar(8000)
+
+DECLARE DBName_Cursor CURSOR FOR 
+select name 
+????from????master.dbo.sysdatabases 
+????where name not in ('master','tempdb','model','pubs','northwind','msdb')
+????Order by name
+
+OPEN DBName_Cursor
+
+FETCH NEXT FROM DBName_Cursor INTO @dbname
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+ Set @mSQL1 = '????Insert into DBROLES ( DBName, UserName, db_owner, db_accessadmin, 
+ db_securityadmin, db_ddladmin, db_datareader, db_datawriter,
+???? db_denydatareader, db_denydatawriter,db_backupoperator )
+????SELECT '+''''+@dbName +''''+ ' as DBName ,UserName, '+char(13)+????'????
+ Max(CASE RoleName WHEN ''db_owner'' ???? THEN ''Yes'' ELSE ''No'' END) AS db_owner,
+???? Max(CASE RoleName WHEN ''db_accessadmin '' THEN ''Yes'' ELSE ''No'' END) AS db_accessadmin ,
+???? Max(CASE RoleName WHEN ''db_securityadmin'' THEN ''Yes'' ELSE ''No'' END) AS db_securityadmin,
+???? Max(CASE RoleName WHEN ''db_ddladmin'' ???? THEN ''Yes'' ELSE ''No'' END) AS db_ddladmin,
+???? Max(CASE RoleName WHEN ''db_datareader'' ???? THEN ''Yes'' ELSE ''No'' END) AS db_datareader,
+???? Max(CASE RoleName WHEN ''db_datawriter'' ???? THEN ''Yes'' ELSE ''No'' END) AS db_datawriter,
+ Max(CASE RoleName WHEN ''db_denydatareader'' THEN ''Yes'' ELSE ''No'' END) AS db_denydatareader,
+???? Max(CASE RoleName WHEN ''db_denydatawriter'' THEN ''Yes'' ELSE ''No'' END) AS db_denydatawriter,
+????Max(CASE RoleName WHEN ''db_backupoperator'' THEN ''Yes'' ELSE ''No'' END) AS db_backupoperator
+????from (
+ select b.name as USERName, c.name as RoleName 
+ ????from ' + @dbName+'.dbo.sysmembers a '+char(13)+ 
+????????????'????join '+ @dbName+'.dbo.sysusers b '+char(13)+
+ ????'????on a.memberuid = b.uid ????join '+@dbName +'.dbo.sysusers c
+???? on a.groupuid = c.uid )s ????
+???????? Group by USERName 
+ order by UserName'
+
+ --Print @mSql1
+ Execute (@mSql1)
+
+ FETCH NEXT FROM DBName_Cursor INTO @dbname
+END
+
+CLOSE DBName_Cursor
+DEALLOCATE DBName_Cursor
+
+DECLARE @db varchar(1024)
+DECLARE @name1 varchar(200)
+DECLARE @name2 int
+DECLARE @hasdbaccess varchar(200)
+DECLARE @islogin varchar(200)
+DECLARE @isntname varchar(200)
+DECLARE @isntgroup varchar(200)
+DECLARE @isntuser varchar(200)
+DECLARE @issqluser varchar(200)
+DECLARE @isaliased varchar(200)
+DECLARE @issqlrole varchar(200)
+DECLARE @isapprole varchar(200)
+
+
+SET @name2 = 1
+
+DECLARE cur CURSOR FOR
+select dbname,username,db_owner,db_accessadmin,db_securityadmin,db_ddladmin,db_datareader,db_datawriter,
+db_denydatareader,db_denydatawriter,db_backupoperator from DBROLES WHERE username <> 'DBO'
+OPEN cur
+FETCH NEXT FROM cur INTO @counter,@name1,@hasdbaccess,@islogin,@isntname,@isntgroup,@isntuser,@issqluser,@isaliased,@issqlrole,@isapprole
+WHILE (@@FETCH_STATUS = 0)
+BEGIN
+print '--@@@@@'+@name1+CONVERT(varchar(5),@name2)+'@@@@@--'
+print 'DECLARE @'+@name1+CONVERT(varchar(5),@name2)+' varchar(1024)'
+print 'DECLARE @'+@name1+CONVERT(varchar(5),@name2)+'2 varchar(1024)'
+print 'DECLARE @'+@name1+CONVERT(varchar(5),@name2)+'3 varchar(1024)'
+print 'DECLARE '+@name1 +CONVERT(varchar(5),@name2)+ ' CURSOR for'
+print 'select name from master..sysdatabases where name IN ('+''''+@counter+''''+')'
+print 'OPEN '+@name1+CONVERT(varchar(5),@name2)
+print 'FETCH NEXT FROM '+@name1+CONVERT(varchar(5),@name2)+' INTO @'+@name1+CONVERT(varchar(5),@name2)
+print 'WHILE (@@FETCH_STATUS = 0)'
+print 'BEGIN'
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'2 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_grantdbaccess '+''''+'+'+''''+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'2)'
+
+-- @hasdbaccess
+IF (@hasdbaccess = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_owner'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @islogin
+IF (@islogin ='YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_accessadmin'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @isntname
+IF (@isntname = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_securityadmin'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @isntgroup
+IF (@isntgroup ='YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_ddladmin'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @isntuser
+IF (@isntuser = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_datareader'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @issqluser
+IF (@issqluser = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_datawriter'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @isaliased
+IF (@isaliased = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_denydatareader'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @issqlrole
+IF (@issqlrole = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_denydatawriter'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+-- @isqpprole
+IF (@isapprole = 'YES')
+BEGIN
+print 'SET @'+@name1+CONVERT(varchar(5),@name2)+'3 = @'+@name1+CONVERT(varchar(5),@name2)+'+'+''''+'..sp_addrolemember '+''''+'+'+''''+'db_backupoperator'+','+@name1+''''
+print 'EXEC (@'+@name1+CONVERT(varchar(5),@name2)+'3)'
+END
+
+
+print 'FETCH NEXT FROM '+@name1+CONVERT(varchar(5),@name2)+' INTO @'+@name1+CONVERT(varchar(5),@name2)
+print 'END'
+print 'CLOSE '+@name1+CONVERT(varchar(5),@name2)
+print 'DEALLOCATE '+@name1+CONVERT(varchar(5),@name2)
+
+SET @name2 = @name2+1
+
+FETCH NEXT FROM cur INTO @counter,@name1,@hasdbaccess,@islogin,@isntname,@isntgroup,@isntuser,@issqluser,@isaliased,@issqlrole,@isapprole
+END
+CLOSE cur
+DEALLOCATE cur
+
+
+
+DROP TABLE DBROLES
+
+
+
+
+
+
+
+

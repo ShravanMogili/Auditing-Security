@@ -1,0 +1,59 @@
+1. Copy the script over to you SQL Query Window
+
+2.Replace the name of the database, that is, '<databasename>' with the name of the database to run against
+
+3. Execute the script to view the resultset displaying that database's users and thier associated database roles
+
+Note: The script works on SQl Server 2005, and has not been tested against SQL Server 2008 yet.
+
+
+
+
+/*
+SQL QUERY NAME:????????Retreive Database Users and Associated Database Roles
+USE DESCRIPTION:????Execute this query against each database to retrieve its users and thier roles
+COMPATIBILITY:????????Works on only SQL Server 2005 Databases
+AUTHOR:????????????????Larry Sumuri
+DATE:????????????????20.01.2010 6:16PM
+*/
+
+USE <databasename>
+GO
+
+CREATE TABLE ##DBUsersAndRoles(DBUser VARCHAR(255), DBUserType VARCHAR(255), DBUserRole VARCHAR(255), DBUserRoleType VARCHAR(255))
+
+DECLARE @DBUser VARCHAR(255) 
+DECLARE @DBUserType VARCHAR(255)
+DECLARE @DBUserRole VARCHAR(255)
+DECLARE @DBUserRoleType VARCHAR(255)
+DECLARE @MemberID INT
+DECLARE @RoleID INT
+DECLARE memberCursor CURSOR
+FAST_FORWARD 
+FOR 
+????SELECT role_principal_id, member_principal_id FROM sys.database_role_members
+
+OPEN memberCursor
+
+????FETCH NEXT FROM memberCursor INTO @RoleID, @MemberID
+????WHILE @@FETCH_STATUS = 0
+????????BEGIN
+????????????SELECT @DBUser = [name], @DBUserType = type_desc
+????????????FROM sys.database_principals
+????????????WHERE principal_id = @MemberID
+
+????????????SELECT @DBUserRole = [name], @DBUserRoleType = type_desc
+????????????FROM sys.database_principals
+????????????WHERE principal_id = @RoleID
+
+????????????INSERT INTO ##DBUsersAndRoles (DBUser,DBUserType,DBUserRole,DBUserRoleType)
+????????????VALUES(@DBUser, @DBUserType, @DBUserRole, @DBUserRoleType)
+????????????
+????????????FETCH NEXT FROM memberCursor INTO @RoleID, @MemberID
+????????END
+
+CLOSE memberCursor
+DEALLOCATE memberCursor
+
+SELECT * FROM ##DBUsersAndRoles ORDER BY DBUSER ASC
+DROP TABLE ##DBUsersAndRoles

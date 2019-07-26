@@ -1,0 +1,59 @@
+dropUnusedLogins
+
+For those site using SQL Server ids as opposed to Integrated security there may be instances where occasionally SQL Server logins might get 'orphaned'. That is the login is not a member of any server group that has general database access nor does that login have specific access to any particular database.  Compile this proc in master and run periodically to delete these logins as a potential security exposure.  If you would rather not delete the ids, comment out the line "EXEC sp_droplogin @username" and the proc will just report on ids that would be removed.  Then you can decide whether these ids should or should not be removed.  
+
+DECLARE @username sysname
+DECLARE @objname  sysname
+DECLARE @found 	integer
+DECLARE @sql 	nvarchar(4000)
+
+SET     @username = ' '
+WHILE	@username IS NOT NULL
+	BEGIN
+	SELECT @username = MIN(name)
+	FROM master.dbo.syslogins 
+	WHERE sysadmin = 0
+	AND securityadmin = 0
+	AND serveradmin = 0
+	AND setupadmin = 0
+	AND processadmin = 0
+	AND diskadmin = 0
+	AND dbcreator = 0
+	AND bulkadmin = 0
+	AND name > @username
+	-- this is the list of non system logins
+	-- ids in server roles may not have corresponding users
+	-- any database but they should not be rremoved
+	SET  @found = 0
+	
+	IF @username IS NOT NULL
+		BEGIN
+		--  now we search through each non system database 
+		--  to see if this login has database access
+		SET  @objname = ''
+		WHILE	@objname IS NOT NULL
+			BEGIN
+			SELECT @objname = MIN( name ) FROM master.dbo.sysdatabases
+			WHERE name NOT IN ('master', 'model', 'msdb', 'tempdb')
+			AND name > @objname
+		
+			IF	@objname IS NOT NULL
+				BEGIN
+				SET @sql = N'SELECT @found = COUNT(*) FROM ' + @objname 
+				+ N'.dbo.sysusers s JOIN master.dbo.sysxlogins x 
+				ON s.sid = x.sid WHERE hasdbaccess = 1 AND x.name = '''+ @username + ''''
+
+				EXEC sp_executesql @sql,N'@found Int OUTPUT',@found OUTPUT
+				--SELECT @found, @objname, @username
+				IF @found IS NOT NULL AND @found > 0 
+					SET @objname = 'zzzzz'  -- terminate as a corresponding user has been found
+				END
+			END
+		IF @found = 0 
+			BEGIN
+			EXEC sp_droplogin @username
+			SELECT @username + ' was removed ' + CONVERT(varchar(23),getdate())
+			END
+		END
+	END
+

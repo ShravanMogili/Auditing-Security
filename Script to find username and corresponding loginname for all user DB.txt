@@ -1,0 +1,40 @@
+Script to find username and corresponding loginname for all user DB Script to find username and corresponding loginname for all user databases in SQL Server 2005/2008/2008R2 
+create proc LoginsAndUsers
+as
+begin
+create table #systemdbs (name sysname)
+insert #systemdbs
+select 'master'
+union select 'msdb'
+union select 'model'
+union select 'tempdb'
+
+create table #dbusers (DatabaseName sysname, UserName sysname, GroupName sysname, LoginName sysname null,
+DefDBName sysname null, DefSchemaName sysname null, UserID int, SID varbinary(1000))
+
+create table #dbusersbuffer ( UserName sysname, GroupName sysname, LoginName sysname null,
+DefDBName sysname null, DefSchemaName sysname null, UserID int, SID varbinary(1000))
+
+
+
+declare @Command nvarchar(1012)
+set @Command= 'if not exists (select * from #systemdbs where name = ''?'') begin '+char(13)+
++'use ? ; insert #dbusersbuffer exec sp_helpuser'+char(13)
++'insert #dbusers select ''?'', * from #dbusersbuffer'+char(13)
++'truncate table #dbusersbuffer'+char(13)
++'end'
+print @Command
+
+exec sp_MSforeachdb @command1 = @Command
+
+select databasename,username,groupname,loginname,defdbname from #dbusers  where username != 'dbo' and groupname !='public' order by DatabaseName
+
+drop table #dbusers
+drop table #dbusersbuffer
+drop table #systemdbs
+end
+go
+
+exec LoginsAndUsers
+drop proc loginsandusers
+
